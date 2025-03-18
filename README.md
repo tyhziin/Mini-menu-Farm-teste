@@ -1,168 +1,127 @@
---// Configurações //--
-local menuKey = Enum.KeyCode.K -- Tecla para abrir/fechar o menu
-local pegarIdKey = Enum.KeyCode.F1 -- Tecla para "pegar ID"
-local menuWidth = 200
-local menuHeight = 300
-local itemDisplayTime = 5 -- Tempo em segundos que o ID do item fica visível
+-- Script para Mini City RP (PC) - Pegar ID
 
---// Serviços //--
-local Players = game:GetService("Players")
-local UserInputService = game:GetService("UserInputService")
-local RunService = game:GetService("RunService")
-local ReplicatedStorage = game:GetService("ReplicatedStorage") -- Para eventos remotos, se necessário
+-- Configurações
+local delayAberturaMenu = 5 -- Tempo em segundos para abrir o menu após a execução
+local larguraMenu = 200
+local alturaMenu = 100
+local corFundoMenu = { r = 0, g = 0, b = 0, a = 200 } -- Cor preta semi-transparente
+local corTextoMenu = { r = 255, g = 255, b = 255, a = 255 } -- Cor branca
 
---// Variáveis //--
-local player = Players.LocalPlayer
-local character = player.Character or player.CharacterAdded:Wait()
-local humanoid = character:WaitForChild("Humanoid")
-local isMenuOpen = false
-local pegarIdAtivo = false
-local itemIdLabel
-local itemDisplayTimerConnection
-local menuFrame
-local pegarIdButton
+-- Variáveis Globais
+local menuVisivel = false
+local janelaArrastando = false
+local janelaX = 100
+local janelaY = 100
+local itemID = nil
 
---// Funções //--
+-- Função para desenhar o menu
+local function DesenharMenu()
+  if menuVisivel then
+    GUI.DrawRectangle(janelaX, janelaY, larguraMenu, alturaMenu, corFundoMenu)
+    GUI.DrawText("Pegar ID", janelaX + 10, janelaY + 10, corTextoMenu)
 
--- Função para criar a janela do menu
-local function criarMenu()
-    menuFrame = Instance.new("Frame")
-    menuFrame.Size = UDim2.new(0, menuWidth, 0, menuHeight)
-    menuFrame.Position = UDim2.new(0.5, -menuWidth / 2, 0.5, -menuHeight / 2)
-    menuFrame.BackgroundColor3 = Color3.new(0.2, 0.2, 0.2)
-    menuFrame.BorderSizePixel = 0
-    menuFrame.Active = true
-    menuFrame.Draggable = true
-    menuFrame.Visible = false -- Inicialmente invisível
-    menuFrame.Parent = player.PlayerGui
-
-    local titleLabel = Instance.new("TextLabel")
-    titleLabel.Size = UDim2.new(1, 0, 0, 30)
-    titleLabel.Position = UDim2.new(0, 0, 0, 0)
-    titleLabel.BackgroundColor3 = Color3.new(0.3, 0.3, 0.3)
-    titleLabel.TextColor3 = Color3.new(1, 1, 1)
-    titleLabel.Text = "Menu de Ferramentas"
-    titleLabel.Font = Enum.Font.SourceSansBold
-    titleLabel.TextScaled = true
-    titleLabel.Parent = menuFrame
-
-    pegarIdButton = Instance.new("TextButton")
-    pegarIdButton.Size = UDim2.new(0.9, 0, 0, 40)
-    pegarIdButton.Position = UDim2.new(0.05, 0, 0, 40)
-    pegarIdButton.BackgroundColor3 = Color3.new(0.4, 0.4, 0.4)
-    pegarIdButton.TextColor3 = Color3.new(1, 1, 1)
-    pegarIdButton.Text = "Pegar ID (F1)"
-    pegarIdButton.Font = Enum.Font.SourceSans
-    pegarIdButton.TextScaled = true
-    pegarIdButton.Parent = menuFrame
-
-    pegarIdButton.MouseButton1Click:Connect(function()
-        pegarIdAtivo = not pegarIdAtivo
-        if pegarIdAtivo then
-            pegarIdButton.Text = "Pegar ID: ATIVO"
-            mostrarMensagem("Pegar ID Ativado. Pegue um item.")
-        else
-            pegarIdButton.Text = "Pegar ID (F1)"
-            mostrarMensagem("Pegar ID Desativado.")
-        end
-    end)
-
-    itemIdLabel = Instance.new("TextLabel")
-    itemIdLabel.Size = UDim2.new(1, 0, 0, 30)
-    itemIdLabel.Position = UDim2.new(0, 0, 0, 90)
-    itemIdLabel.BackgroundColor3 = Color3.new(0.1, 0.1, 0.1)
-    itemIdLabel.TextColor3 = Color3.new(1, 1, 0)
-    itemIdLabel.Text = ""
-    itemIdLabel.Font = Enum.Font.SourceSans
-    itemIdLabel.TextScaled = true
-    itemIdLabel.Parent = menuFrame
-    itemIdLabel.Visible = false
-end
-
-
--- Função para mostrar o ID do item
-local function mostrarItemId(itemId)
-    itemIdLabel.Text = "ID do Item: " .. tostring(itemId)
-    itemIdLabel.Visible = true
-
-    if itemDisplayTimerConnection then
-        itemDisplayTimerConnection:Disconnect()
+    -- Mostrar o ID do item (se disponível)
+    if itemID then
+      GUI.DrawText("ID: " .. tostring(itemID), janelaX + 10, janelaY + 40, corTextoMenu)
+    else
+      GUI.DrawText("Segure um item...", janelaX + 10, janelaY + 40, corTextoMenu)
     end
 
-    itemDisplayTimerConnection = RunService.Heartbeat:Wait(itemDisplayTime)
-    itemIdLabel.Visible = false
+    -- Botão para fechar (opcional)
+    --GUI.DrawText("[Fechar]", janelaX + larguraMenu - 60, janelaY + alturaMenu - 20, corTextoMenu)
+  end
 end
 
--- Função para mostrar mensagens na tela
-local function mostrarMensagem(mensagem)
-    local mensagemLabel = Instance.new("TextLabel")
-    mensagemLabel.Size = UDim2.new(0, 200, 0, 30)
-    mensagemLabel.Position = UDim2.new(0.5, -100, 0.2, 0)
-    mensagemLabel.BackgroundColor3 = Color3.new(0, 0, 0, 0.7)
-    mensagemLabel.TextColor3 = Color3.new(1, 1, 1)
-    mensagemLabel.Text = mensagem
-    mensagemLabel.Font = Enum.Font.SourceSans
-    mensagemLabel.TextScaled = true
-    mensagemLabel.Parent = player.PlayerGui
-    mensagemLabel.ZIndex = 10
+-- Função para verificar se o mouse está sobre o botão (opcional)
+--local function MouseSobreBotaoFechar(mouseX, mouseY)
+--  return mouseX > janelaX + larguraMenu - 60 and mouseX < janelaX + larguraMenu - 10 and
+--         mouseY > janelaY + alturaMenu - 20 and mouseY < janelaY + alturaMenu - 10
+--end
 
-    game:GetService("TweenService"):Create(mensagemLabel, TweenInfo.new(0.5, Enum.EasingStyle.Quad, Enum.EasingDirection.Out), {Position = UDim2.new(0.5, -100, 0.1, 0)}):Play()
 
-    wait(3)
-
-    game:GetService("TweenService"):Create(mensagemLabel, TweenInfo.new(0.5, Enum.EasingStyle.Quad, Enum.EasingDirection.In), {Position = UDim2.new(0.5, -100, 0, 0)}):Play()
-
-    wait(0.5)
-    mensagemLabel:Destroy()
-end
-
---// Conexões de Eventos //--
-
--- Função para verificar se o player pegou um item
-local function onItemEquipped(tool)
-    if pegarIdAtivo then
-        local itemId = tool.Name -- Use o nome da ferramenta como ID (pode ajustar)
-        mostrarItemId(itemId)
+-- Função para lidar com cliques do mouse
+local function OnMouseClick(mouseX, mouseY, button)
+  if menuVisivel then
+    -- Lógica de arrastar janela
+    if button == 1 and mouseX > janelaX and mouseX < janelaX + larguraMenu and mouseY > janelaY and mouseY < janelaY + 20 then
+      janelaArrastando = true
+      arrastoOffsetX = mouseX - janelaX
+      arrastoOffsetY = mouseY - janelaY
     end
+
+    -- Lógica do botão de fechar (opcional)
+    --if MouseSobreBotaoFechar(mouseX, mouseY) then
+    --  menuVisivel = false
+    --end
+  end
 end
 
--- Conectar ao evento de equipar uma ferramenta
-player.CharacterAdded:Connect(function(char)
-    character = char
-    humanoid = char:WaitForChild("Humanoid")
-
-    humanoid.Equipped:Connect(onItemEquipped)
-end)
-
-if character and humanoid then
-    humanoid.Equipped:Connect(onItemEquipped)
+-- Função para lidar com o movimento do mouse
+local function OnMouseMove(mouseX, mouseY)
+  if janelaArrastando then
+    janelaX = mouseX - arrastoOffsetX
+    janelaY = mouseY - arrastoOffsetY
+  end
 end
 
--- Evento para abrir/fechar o menu com a tecla
-UserInputService.InputBegan:Connect(function(input, gameProcessedEvent)
-    if gameProcessedEvent then return end -- Ignora se o jogo já está processando o evento (ex: digitando no chat)
-
-    if input.KeyCode == menuKey then
-        isMenuOpen = not isMenuOpen
-        menuFrame.Visible = isMenuOpen
-        if isMenuOpen then
-            mostrarMensagem("Menu ABERTO (K)")
-        else
-            mostrarMensagem("Menu FECHADO (K)")
-        end
-    elseif input.KeyCode == pegarIdKey then
-        pegarIdAtivo = not pegarIdAtivo
-        if pegarIdAtivo then
-            pegarIdButton.Text = "Pegar ID: ATIVO"
-            mostrarMensagem("Pegar ID Ativado. Pegue um item.")
-        else
-            pegarIdButton.Text = "Pegar ID (F1)"
-            mostrarMensagem("Pegar ID Desativado.")
-        end
-    end
-end)
+-- Função para lidar com o fim do clique do mouse
+local function OnMouseRelease(mouseX, mouseY, button)
+  if button == 1 then
+    janelaArrastando = false
+  end
+end
 
 
---// Inicialização //--
-criarMenu()
-mostrarMensagem("Script Carregado. Pressione K para abrir o menu.")
+-- Função para obter o ID do item na mão (adaptar para Mini City RP)
+local function ObterIDItemNaMao()
+  -- *** AQUI VOCÊ PRECISARÁ ADAPTAR PARA A API DO MINI CITY RP ***
+  -- Exemplo genérico (provavelmente NÃO FUNCIONARÁ sem adaptação):
+  -- local item = API.GetItemNaMao(Player.GetLocalPlayer())
+  -- if item then
+  --   return item.ID
+  -- else
+  --   return nil
+  -- end
+  -- Pesquise na documentação do Mini City RP ou pergunte aos desenvolvedores como obter o item que o jogador está segurando.
+  -- Este é o ponto crucial da adaptação.
+  -- Se não houver uma função direta para obter o ID, pode ser necessário rastrear o inventário e detectar quando o item ativo muda.
+
+  -- Placeholder para testar (substitua com a lógica real do Mini City RP)
+  -- ATENÇÃO: ISSO É APENAS PARA TESTE E NÃO FUNCIONARÁ NO JOGO REAL SEM ADAPTAÇÃO
+  local itemNaMao = Player.GetCarryingItem() -- Tentativa de obter um item carregado
+  if itemNaMao then
+    return itemNaMao.ItemID -- Tenta acessar um campo ItemID
+  else
+    return nil
+  end
+
+end
+
+
+-- Função principal do script
+local function Main()
+  -- Abre o menu após o delay
+  Timer.Create(delayAberturaMenu, false, function()
+    menuVisivel = true
+  end)
+
+  -- Loop principal (executado a cada frame)
+  while true do
+    -- Atualiza o ID do item na mão
+    itemID = ObterIDItemNaMao()
+
+    -- Desenha o menu
+    DesenharMenu()
+
+    -- Aguarda o próximo frame
+    coroutine.yield()
+  end
+end
+
+-- Eventos de mouse
+Events.OnMouseClick.Add(OnMouseClick)
+Events.OnMouseMove.Add(OnMouseMove)
+Events.OnMouseRelease.Add(OnMouseRelease)
+
+-- Inicia o script
+Main()
