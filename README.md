@@ -1,249 +1,232 @@
-PRIMEIRO SCRIPT 
-
--- Script para mostrar o inventário equipado de jogadores em Mini City RP
-
 -- Configurações
-local corDoRetangulo = Color3.fromRGB(0, 128, 255) -- Cor do retângulo (azul)
-local transparenciaDoRetangulo = 0.5 -- Transparência do retângulo (0 a 1)
-local corDoTexto = Color3.White -- Cor do texto
-local tamanhoDoTexto = 16 -- Tamanho do texto
-local tempoDeAtualizacao = 1 -- Tempo (em segundos) entre as atualizações do inventário
+local corDeFundo = Color3.new(0, 0, 0)
+local tamanhoQuadrado = UDim2.new(0.2, 0, 0.3, 0)
+local distanciaJogador = 5
+local tempoAtualizacao = 0.5
+local limiteItens = 3 -- Limite de itens equipados a exibir
 
--- Funções auxiliares
-local function criarRetangulo(jogador)
-    local gui = Instance.new("ScreenGui")
-    gui.Name = "InventarioGUI"
-    gui.Parent = jogador.PlayerGui
+--[[
+IMPORTANTE: Este script DEVE ser executado em um Script NORMAL dentro do ServerScriptService.
+Um Script LOCAL (dentro do PlayerGui) NÃO funciona para acessar dados de outros jogadores.
+
+Este script combina:
+1.  Detecção de itens equipados via "Inventory" (com BoolValue "Equipped")
+2.  Detecção de roupas (Hat/Shirt/Pants/Accessory) usando Tags nos acessórios
+3.  Uso de RemoteEvent para identificar o LocalPlayer corretamente.
+
+O script assume que:
+- Itens de inventário "equipados" estão na pasta "Inventory" com BoolValue "Equipped" = true.
+- Roupas (chapéus, camisas, calças) usam Tags (ShirtTag, PantsTag, HatTag, AccessoryTag) dentro da Handle do acessório.
+
+]]
+
+--[[
+FUNÇÕES AUXILIARES
+]]
+
+local function criarLabel(layout, texto)
+    local label = Instance.new("TextLabel")
+    label.Text = texto
+    label.TextColor3 = Color3.new(1, 1, 1)
+    label.BackgroundTransparency = 1
+    label.Size = UDim2.new(1, 0, 0, 20)
+    label.Font = Enum.Font.SourceSansPro
+    label.TextScaled = true
+    label.Parent = layout.Parent
+end
+
+local function verificarDistancia(jogadorLocal, jogadorAlvo)
+    if not jogadorLocal or not jogadorLocal.Character or not jogadorAlvo or not jogadorAlvo.Character then
+        return false
+    end
+
+    local posicaoLocal = jogadorLocal.Character:GetPivot().Position
+    local posicaoAlvo = jogadorAlvo.Character:GetPivot().Position
+    local distancia = (posicaoLocal - posicaoAlvo).Magnitude
+
+    return distancia <= distanciaJogador
+end
+
+--[[
+CRIAÇÃO DA INTERFACE
+]]
+
+local function criarInterface(jogador)
+    local quadro = Instance.new("BillboardGui")
+    quadro.Name = "ItensEquipadosGUI"
+    quadro.Extents = Vector3.new(5, 5, 5)
+    quadro.AlwaysOnTop = true
+    quadro.StudsOffset = Vector3.new(0, 3, 0)
+    quadro.Enabled = false
 
     local frame = Instance.new("Frame")
-    frame.Name = "InventarioFrame"
-    frame.Size = UDim2.new(0, 200, 0, 150) -- Tamanho do retângulo
-    frame.Position = UDim2.new(0.5, -100, 0.1, 0) -- Posição centralizada no topo da tela
-    frame.BackgroundColor3 = corDoRetangulo
-    frame.BackgroundTransparency = transparenciaDoRetangulo
+    frame.Size = tamanhoQuadrado
+    frame.BackgroundTransparency = 0.5
+    frame.BackgroundColor3 = corDeFundo
     frame.BorderSizePixel = 0
-    frame.Parent = gui
+    frame.Parent = quadro
 
-    local texto = Instance.new("TextLabel")
-    texto.Name = "InventarioTexto"
-    texto.Size = UDim2.new(1, 0, 1, 0)
-    texto.Position = UDim2.new(0, 0, 0, 0)
-    texto.BackgroundColor3 = Color3.new(1, 1, 1)
-    texto.BackgroundTransparency = 1
-    texto.TextColor3 = corDoTexto
-    texto.TextSize = tamanhoDoTexto
-    texto.Font = Enum.Font.SourceSansBold
-    texto.TextXAlignment = Enum.TextXAlignment.Left
-    texto.TextYAlignment = Enum.TextYAlignment.Top
-    texto.Text = "" -- O texto será atualizado posteriormente
-    texto.Parent = frame
+    local layout = Instance.new("UIListLayout")
+    layout.Parent = frame
+    layout.FillDirection = Enum.FillDirection.Vertical
+    layout.HorizontalAlignment = Enum.HorizontalAlignment.Center
+    layout.VerticalAlignment = Enum.VerticalAlignment.Top
+    layout.Padding = UDim.new(0, 5)
 
-    return gui, frame, texto
+    quadro.Parent = jogador.Character:WaitForChild("Head")
+
+    return quadro, frame, layout
 end
 
+--[[
+ATUALIZAÇÃO DA INTERFACE
+]]
 
-local function atualizarInventario(jogador, texto)
-    -- Aqui você deve obter os itens equipados do jogador.  A LÓGICA DE COMO FAZER ISSO DEPENDE TOTALMENTE DO SEU JOGO.
-    --  **IMPORTANTE**:  Substitua esta seção com o código específico do seu jogo para acessar o inventário.
-
-    -- **EXEMPLO GENÉRICO (ADAPTE PARA O SEU JOGO)**
-    local inventarioEquipado = {}
-
-    -- ***SUBSTITUA TODO ESTE BLOCO COM A LÓGICA DO SEU JOGO***
-    if jogador:FindFirstChild("Equipamentos") then
-      local equipamentos = jogador:FindFirstChild("Equipamentos"):GetChildren()
-      for _, item in ipairs(equipamentos) do
-        if item:IsA("StringValue") then  -- ou qualquer outro tipo de objeto que represente um item
-          table.insert(inventarioEquipado, item.Value)
+local function atualizarInterface(jogador, quadro, layout)
+    -- Limpar labels existentes
+    for _, child in ipairs(layout.Parent:GetChildren()) do
+        if child:IsA("TextLabel") then
+            child:Destroy()
         end
-      end
-    end
-    -- ***FIM DO BLOCO QUE VOCÊ PRECISA SUBSTITUIR***
-
-
-    -- Formatar o texto do inventário
-    local textoInventario = ""
-    for i, item in ipairs(inventarioEquipado) do
-        textoInventario = textoInventario .. item .. "\n"
     end
 
-    -- Atualizar o texto na tela
-    texto.Text = textoInventario
-end
+    local itensExibidos = 0
 
+    -- 1. ITENS DO INVENTÁRIO:
+    local inventory = jogador:FindFirstChild("Inventory")
+    if inventory then
+        for _, item in ipairs(inventory:GetChildren()) do
+            if itensExibidos >= limiteItens then break end -- Limite
 
-local function inicializarJogador(jogador)
-    local gui, frame, texto = criarRetangulo(jogador)
-    atualizarInventario(jogador, texto) -- Atualizar o inventário imediatamente
-
-    -- Loop para atualizar o inventário periodicamente
-    while wait(tempoDeAtualizacao) do
-        if jogador and jogador.Parent then  -- Verificar se o jogador ainda está no jogo
-            if gui and gui.Parent then --Verifica se a gui ainda existe
-                atualizarInventario(jogador, texto)
-            else
-                break --Sai do loop se a GUI não existe mais
+            if item:IsA("BasePart") or item:IsA("Model") then
+                local equipado = item:FindFirstChild("Equipped")
+                if equipado and equipado:IsA("BoolValue") and equipado.Value == true then
+                    criarLabel(layout, item.Name)
+                    itensExibidos = itensExibidos + 1
+                end
             end
-        else
-            break -- Sair do loop se o jogador não está mais no jogo
         end
     end
 
-    -- Limpeza (opcional, mas recomendado)
-    if gui then
-        gui:Destroy()
+    -- 2. ROUPAS (TAGS NOS ACESSÓRIOS):
+    for _, acessorio in ipairs(jogador.Character:GetChildren()) do
+        if itensExibidos >= limiteItens then break end -- Limite
+
+        if acessorio:IsA("Accessory") then
+            if acessorio.Handle:FindFirstChild("ShirtTag") then
+                criarLabel(layout, acessorio.Name)
+                itensExibidos = itensExibidos + 1
+            elseif acessorio.Handle:FindFirstChild("PantsTag") then
+                criarLabel(layout, acessorio.Name)
+                itensExibidos = itensExibidos + 1
+            elseif acessorio.Handle:FindFirstChild("HatTag") then
+                criarLabel(layout, acessorio.Name)
+                itensExibidos = itensExibidos + 1
+            elseif acessorio.Handle:FindFirstChild("AccessoryTag") then
+                criarLabel(layout, acessorio.Name)
+                itensExibidos = itensExibidos + 1
+            end
+        elseif acessorio:IsA("Shirt") or acessorio:IsA("Pants") then
+            criarLabel(layout, acessorio.Name)
+            itensExibidos = itensExibidos + 1
+        end
     end
 end
 
+--[[
+GERENCIAMENTO DOS JOGADORES (ENTRADA/SAÍDA) E LOOP PRINCIPAL
+]]
 
+local LocalPlayers = {} -- Tabela para armazenar quais jogadores são LocalPlayers (por cliente)
+local interfaces = {}    -- Tabela para armazenar as interfaces dos jogadores
 
--- Evento para quando um jogador entra no jogo
-game.Players.PlayerAdded:Connect(function(jogador)
-    inicializarJogador(jogador)
+-- RemoteEvent para setar o LocalPlayer (lado servidor)
+game.ReplicatedStorage.SetLocalPlayer.OnServerEvent:Connect(function(player)
+    LocalPlayers[player] = true -- Marca este jogador como LocalPlayer
 end)
 
--- Lógica para jogadores que já estão no jogo quando o script é executado
-for _, jogador in ipairs(game.Players:GetPlayers()) do
-    inicializarJogador(jogador)
-end
-
-
-
-
-SEGUNDO SCRIPT 
-
--- Script para mostrar o inventário equipado de jogadores em Mini City RP
-
--- Configurações
-local corDoRetangulo = Color3.fromRGB(0, 128, 255) -- Cor do retângulo (azul)
-local transparenciaDoRetangulo = 0.5 -- Transparência do retângulo (0 a 1)
-local corDoTexto = Color3.White -- Cor do texto
-local tamanhoDoTexto = 16 -- Tamanho do texto
-local tempoDeAtualizacao = 1 -- Tempo (em segundos) entre as atualizações do inventário
-
--- Funções auxiliares
-local function criarRetangulo(jogador)
-    local gui = Instance.new("ScreenGui")
-    gui.Name = "InventarioGUI"
-    gui.Parent = jogador.PlayerGui
-
-    local frame = Instance.new("Frame")
-    frame.Name = "InventarioFrame"
-    frame.Size = UDim2.new(0, 200, 0, 150) -- Tamanho do retângulo
-    frame.Position = UDim2.new(0.5, -100, 0.1, 0) -- Posição centralizada no topo da tela
-    frame.BackgroundColor3 = corDoRetangulo
-    frame.BackgroundTransparency = transparenciaDoRetangulo
-    frame.BorderSizePixel = 0
-    frame.Parent = gui
-
-    local texto = Instance.new("TextLabel")
-    texto.Name = "InventarioTexto"
-    texto.Size = UDim2.new(1, 0, 1, 0)
-    texto.Position = UDim2.new(0, 0, 0, 0)
-    texto.BackgroundColor3 = Color3.new(1, 1, 1)
-    texto.BackgroundTransparency = 1
-    texto.TextColor3 = corDoTexto
-    texto.TextSize = tamanhoDoTexto
-    texto.Font = Enum.Font.SourceSansBold
-    texto.TextXAlignment = Enum.TextXAlignment.Left
-    texto.TextYAlignment = Enum.TextYAlignment.Top
-    texto.Text = "" -- O texto será atualizado posteriormente
-    texto.Parent = frame
-
-    return gui, frame, texto
-end
-
-
-local function atualizarInventario(jogador, texto)
-    -- Aqui você deve obter os itens equipados do jogador.  A LÓGICA DE COMO FAZER ISSO DEPENDE TOTALMENTE DO SEU JOGO.
-    --  **IMPORTANTE**:  Substitua esta seção com o código específico do seu jogo para acessar o inventário.
-
-    -- **EXEMPLO GENÉRICO (ADAPTE PARA O SEU JOGO)**
-    local inventarioEquipado = {}
-
-    -- ***SUBSTITUA TODO ESTE BLOCO COM A LÓGICA DO SEU JOGO***
-    if jogador:FindFirstChild("Equipamentos") then
-      local equipamentos = jogador:FindFirstChild("Equipamentos"):GetChildren()
-      for _, item in ipairs(equipamentos) do
-        if item:IsA("StringValue") then  -- ou qualquer outro tipo de objeto que represente um item
-          table.insert(inventarioEquipado, item.Value)
-        end
-      end
-    end
-    -- ***FIM DO BLOCO QUE VOCÊ PRECISA SUBSTITUIR***
-
-
-    -- Formatar o texto do inventário
-    local textoInventario = ""
-    for i, item in ipairs(inventarioEquipado) do
-        textoInventario = textoInventario .. item .. "\n"
-    end
-
-    -- Atualizar o texto na tela
-    texto.Text = textoInventario
-end
-
-
-local function inicializarJogador(jogador)
-    local gui, frame, texto = criarRetangulo(jogador)
-    atualizarInventario(jogador, texto) -- Atualizar o inventário imediatamente
-
-    -- Loop para atualizar o inventário periodicamente
-    while wait(tempoDeAtualizacao) do
-        if jogador and jogador.Parent then  -- Verificar se o jogador ainda está no jogo
-            if gui and gui.Parent then --Verifica se a gui ainda existe
-                atualizarInventario(jogador, texto)
-            else
-                break --Sai do loop se a GUI não existe mais
+local function atualizarInterfaces()
+    for _, jogadorAlvo in ipairs(game.Players:GetPlayers()) do
+        if LocalPlayers[jogadorAlvo] == true then -- É LocalPlayer? NÃO MOSTRAR
+            if interfaces[jogadorAlvo] then
+                local quadro, _, _ = unpack(interfaces[jogadorAlvo])
+                quadro.Enabled = false
             end
-        else
-            break -- Sair do loop se o jogador não está mais no jogo
+        else -- NÃO é LocalPlayer? MOSTRAR (se estiver perto)
+            if not interfaces[jogadorAlvo] then
+                interfaces[jogadorAlvo] = criarInterface(jogadorAlvo)
+            end
+
+            local quadro, frame, layout = unpack(interfaces[jogadorAlvo])
+
+            -- Encontrar o LocalPlayer mais próximo (complexo, pois pode ter vários)
+            local jogadorLocal = nil
+            local menorDistancia = math.huge
+
+            for player, _ in pairs(LocalPlayers) do --Itera sobre os jogadores locais.
+                if player and player.Character and jogadorAlvo and jogadorAlvo.Character then
+                    local distancia = (player.Character:GetPivot().Position - jogadorAlvo.Character:GetPivot().Position).Magnitude
+                    if distancia < menorDistancia then
+                        menorDistancia = distancia
+                        jogadorLocal = player
+                    end
+                end
+            end
+
+            if jogadorLocal and verificarDistancia(jogadorLocal, jogadorAlvo) then
+                atualizarInterface(jogadorAlvo, quadro, layout)
+                quadro.Enabled = true
+            else
+                quadro.Enabled = false
+            end
         end
     end
+end
 
-    -- Limpeza (opcional, mas recomendado)
-    if gui then
-        gui:Destroy()
+local function jogadorEntrou(jogador)
+    interfaces[jogador] = criarInterface(jogador)
+
+    jogador.CharacterAppearanceLoaded:Connect(function()
+        task.wait(1)
+        atualizarInterfaces()
+    end)
+
+    -- Criar a pasta "Inventory" se não existir
+    if not jogador:FindFirstChild("Inventory") then
+        local inventory = Instance.new("Folder")
+        inventory.Name = "Inventory"
+        inventory.Parent = jogador
     end
 end
 
-
-
--- Evento para quando um jogador entra no jogo
-game.Players.PlayerAdded:Connect(function(jogador)
-    inicializarJogador(jogador)
-end)
-
--- Lógica para jogadores que já estão no jogo quando o script é executado
-for _, jogador in ipairs(game.Players:GetPlayers()) do
-    inicializarJogador(jogador)
+local function jogadorSaiu(jogador)
+    if interfaces[jogador] then
+        local quadro, _, _ = unpack(interfaces[jogador])
+        quadro:Destroy()
+        interfaces[jogador] = nil
+    end
+    LocalPlayers[jogador] = nil -- Remover o jogador da tabela de LocalPlayers
 end
 
+local function inicializar()
+    -- Conectar eventos de entrada/saída de jogadores
+    game.Players.PlayerAdded:Connect(jogadorEntrou)
+    game.Players.PlayerRemoving:Connect(jogadorSaiu)
 
--- **EXPLICAÇÃO DO CÓDIGO:**
+    -- Inicializar interfaces para jogadores existentes
+    for _, jogador in ipairs(game.Players:GetPlayers()) do
+        jogadorEntrou(jogador)
+    end
 
--- 1. **Configurações:** Define as cores, transparência, tamanho do texto e o tempo de atualização.  Ajuste esses valores conforme necessário.
+    -- Loop principal de atualização
+    while true do
+        task.wait(tempoAtualizacao)
+        atualizarInterfaces()
+    end
+end
 
--- 2. **`criarRetangulo(jogador)`:**
---   - Cria um `ScreenGui` para o jogador.
---   - Cria um `Frame` (o retângulo) dentro do `ScreenGui`.
---   - Cria um `TextLabel` dentro do `Frame` para exibir os itens.
---   - Define as propriedades visuais (cor, tamanho, posição, etc.).
+--[[
+INÍCIO DO SCRIPT
+]]
 
--- 3. **`atualizarInventario(jogador, texto)`:**
---   - **IMPORTANTE:** Esta é a função que você precisa modificar para funcionar com o seu jogo.  Atualmente, ela tem um exemplo genérico que **NÃO VAI FUNCIONAR** sem modificação.
---   - **VOCÊ PRECISA SUBSTITUIR O BLOCO COMENTADO COM `***SUBSTITUA TODO ESTE BLOCO...`** pela lógica correta para acessar os itens equipados do jogador no seu jogo.  Isso pode envolver acessar objetos no `Character`, acessar um serviço de inventário, ou qualquer outro método específico do seu jogo.
---   - Formata os itens em uma string para exibição no `TextLabel`.
-
--- 4. **`inicializarJogador(jogador)`:**
---   - Chama `criarRetangulo` para criar a interface para o jogador.
---   - Chama `atualizarInventario` para exibir o inventário inicial.
---   - Inicia um loop `while` que:
---     - Espera `tempoDeAtualizacao` segundos.
---     - Chama `atualizarInventario` para atualizar a exibição do inventário.
---     - Verifica se o jogador ainda está no jogo e se a GUI ainda existe antes de continuar. Isso evita erros.
---   - Destrói a GUI quando o loop termina (geralmente quando o jogador sai). Isso é importante para evitar vazamentos de memória.
-
--- 5. **Eventos `PlayerAdded` e Inicialização Inicial:**
---   - O evento `game.Players.PlayerAdded` garante que a interface seja criada para novos jogadores que entram no jogo.
---   - O loop `for _, jogador in ipairs(game.Players:GetPlayers()) do` inicializa a interface para jogadores que já estão no jogo quando o script é iniciado
+inicializar()
